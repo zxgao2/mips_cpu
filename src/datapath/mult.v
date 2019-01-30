@@ -1,0 +1,36 @@
+`include "src\\head.v"
+module mult(mult_op,rs,rt,hi,lo);
+  input    [2:0]    mult_op;
+  input    [31:0]   rs,rt;
+  output   [31:0]   hi,lo;
+  wire  flag1,flag2;
+  wire [31:0]   rs1,rt1;
+  wire [63:0] ji;
+  
+  wire     [31:0]     shang,yushu;
+  
+      toyuan  toyuan1(rs,rs1,flag1);
+      toyuan  toyuan2(rt,rt1,flag2);
+      
+      
+  assign   ji    = (flag1==flag2)?    rs1*rt1:(~(rs1*rt1))+1;
+  assign   shang = (flag1==flag2)?    rs1/rt1:(~(rs1/rt1))+1;
+  assign   yushu = (flag1==0)?    rs1%rt1:(~(rs1%rt1))+1;
+  
+  assign {hi,lo} = (mult_op == `mult)?      ji:
+                   (mult_op == `multu)?     rs*rt:
+                   (mult_op == `div)?       {yushu,shang}:
+                   (mult_op == `divu)?      {rs%rt,rs/rt}:
+                   (mult_op == `mth)?       {rs,lo}:
+                   (mult_op == `mtl)?       {hi,rs}:{hi,lo};
+endmodule  
+                   
+                   
+module toyuan(num1,numout,flag);
+  input [31:0]  num1;
+  output [31:0] numout;
+  output flag;
+  
+  assign numout = (num1[31] == 1)?    ((~num1)+1):num1;
+  assign flag = (num1[31] == 1)?         1'b1:1'b0;
+endmodule

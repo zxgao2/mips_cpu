@@ -1,0 +1,273 @@
+`include "src\\head.v"
+module control(instr,ext_op,alu_op,alu_sel,busw_sel,rw_sel,npc_op,regwr,dm_we,load_op,store_op,pc_wr,irr_wr,clk,rst,mult_op,intreq,cp0_we,exlset,exlclr,epc_we);
+  input       [31:0]        instr;
+  input                     clk,rst,intreq;
+  output      [1:0]         ext_op;
+  output      [3:0]         alu_op;
+  output                    alu_sel;    
+  output      [2:0]         busw_sel;
+  output      [1:0]         rw_sel;
+  output      [3:0]         npc_op;  
+  output                    regwr;  
+  output                    dm_we;  
+  output      [2:0]         load_op; 
+  output      [1:0]         store_op; 
+  output                    pc_wr;
+  output                    irr_wr,cp0_we,exlset,exlclr,epc_we;  
+  output      [2:0]         mult_op;
+  wire                      s0,s1,s2,s3,s4,s5,s6,s7,s8,s9,s10;
+   
+  reg     [3:0]             fsm ;  
+  
+  parameter S0 = 4'b0000,S1 = 4'b0001,S2 = 4'b0010,S3 = 4'b0011,S4 = 4'b0100,S5 = 4'b0101,S6 = 4'b0110,S7 = 4'b0111,S8 = 4'b1000,S9 = 4'b1001,S10 = 4'b1010,S11 = 4'b1011,S12 = 4'b1100;
+  instruction  my_instruction(instr,addu,addi,addiu,subu,ori,lui,slt,lw,sw,beq,j,jal,jr,bne,sltu,sltiu,blez,lb,lbu,lh,lhu,sb,sh,slti,bgtz,bgez,bltz,jalr,add,sub,sll,sllv,srl,srlv,sra,srav,and1,andi,or1,xor1,nor1,xori,mult,multu,div,divu,mthi,mtlo,mfhi,mflo,eret,mfc0,mtc0);
+  
+  assign s0 = (fsm == S0);
+  assign s1 = (fsm == S1);
+  assign s2 = (fsm == S2);
+  assign s3 = (fsm == S3);
+  assign s4 = (fsm == S4);
+  assign s5 = (fsm == S5);
+  assign s6 = (fsm == S6);
+  assign s7 = (fsm == S7);
+  assign s8 = (fsm == S8);
+  assign s9 = (fsm == S9);
+  assign s10  = (fsm == S10);
+  assign s11  = (fsm == S11);
+  assign s12  = (fsm == S12);
+   
+  always @(posedge clk or posedge rst)
+     if (rst)  fsm <= S0;
+     else 
+       case (fsm)
+         S0   :        fsm <= S1;
+         S1   :        if (beq||bne||blez||bgtz||bgez||bltz) fsm <=  S8;
+                       else if (jal||jr||j||jalr||eret) fsm <= S9;
+                            else if (lb||lbu||lh||lhu||lw||sw||sh||sb) fsm <= S2;
+                                 else  if (mult||multu||div||divu||mthi||mtlo||mtc0) fsm <= S10;
+                                    else  if (mflo||mfhi||mfc0) fsm <= S11;
+                                      else fsm <= S6;
+         S2   :       if (sw||sh||sb) fsm <= S5;
+                       else  fsm <= S3;
+         S3   :       fsm <= S4;
+         S4   :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S5   :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S6   :       fsm <= S7;
+         S7   :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S8   :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S9   :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S10  :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+         S11  :       if(intreq)
+                             fsm <= S12  ;
+                       else
+                             fsm <= S0   ;
+        S12   :       fsm <= S0;
+         default  :   fsm <= S0;
+       endcase 
+         
+         
+  assign irr_wr   = s0;       
+  assign pc_wr    = (s1||(beq&&s8)||(bne&&s8)||(blez&&s8)||(bgtz&&s8)||(bgez&&s8)||(bltz&&s8)||((jal||jr||j||jalr)&&s9))?               1'b1:1'b0;       
+  assign rw_sel   = (addu||subu||slt||sltu||jalr||add||sub||sll||sllv||sra||srav||srl||srlv||and1||or1||xor1||nor1||(s11&&(mfhi||mflo)))?                                                  2'b01:
+                    (lw||lb||lbu||lh||lhu||ori||lui||addi||addiu||slti||xori||andi||sltiu||(s11&&mfc0))?                      2'b00:
+                    (jal)?                                                                    2'b10:2'b11;
+  assign alu_sel  = (addu||subu||slt||beq||bne||sltu||add||sub||sll||sllv||sra||srav||srl||srlv||and1||or1||xor1||nor1)?                                        1'b0:1'b1;
+  assign busw_sel = (addu||subu||slt||sltu||sltiu||slti||ori||lui||xori||addi||addiu||add||sra||srav||sub||sll||sllv||srl||srlv||and1||andi||or1||xor1||nor1)?                           3'b000:
+                    (lw||lb||lbu||lh||lhu)?                                                         3'b001:
+                    (mfhi)?                                                                          3'b011:
+                    (mflo)?                                                                          3'b100:
+                    (mfc0)?                                                                          3'b101:
+                    (jal||jalr)?                                                                    3'b010:3'b10;
+                    
+  assign regwr    = (s7||s4||(s9&&(jal||jalr))||s11)?                                                      1'b1:1'b0;
+  assign dm_we    = (s5)?                                                                     1'b1:1'b0;
+  assign npc_op   = (s12)?                                                                        `PC_BREAK:
+                    (beq&&s8)?                                                                    `PC_BEQ:
+                    (jal&&s9)?                                                                    `PC_JAL:
+                    (jr&&s9)?                                                                     `PC_JR:
+                    (j&&s9)?                                                                       `PC_J:
+                    (jalr&&s9)?                                                                       `PC_JALR:
+                    (blez&&s8)?                                                                    `PC_BLEZ:
+                    (bgtz&&s8)?                                                                     `PC_BGTZ:
+                    (bgez&&s8)?                                                                     `PC_BGEZ:
+                    (bltz&&s8)?                                                                     `PC_BLTZ:
+                    (bne&&s8)?                                                                     `PC_BNE:3'b000;
+  assign ext_op   = (ori)?                                                                      `ZERO_EXT:
+                    (lui)?                                                                     2'b10:2'b01;
+  assign alu_op   = (beq||subu||bne||sub)?                                                         `ALU_SUB:
+                    (sltu||sltiu)?                                                                  `ALU_SLTU:
+                    (and1||andi)?                                                                  `ALU_AND:
+                    (xor1||xori)?                                                                  `ALU_XOR:
+                    (nor1)?                                                                  `ALU_NOR:
+                    (slt||slti)?       	             	 	                     	                `ALU_SLT:
+                    (sll)?                                                                    `ALU_SLL :
+                    (sra)?                                                                    `ALU_SRA:
+                    (srav)?                                                                    `ALU_SRAV:        
+                    (sllv)?                                                                    `ALU_SLLV:
+                    (srl)?                                                                    `ALU_SRL :
+                    (srlv)?                                                                    `ALU_SRLV:   
+                    (ori||or1)?                                                                    `ALU_OR:`ALU_ADD;   
+  assign load_op  = (lw)?                                                                      `LW:
+                    (lb)?                                                                      `LB:                  
+                    (lbu)?                                                                      `LBU:
+                    (lh)?                                                                      `LH: 
+                    (lhu)?                                                                      `LHU :`LW;
+  assign store_op = (sw)?                                                                      `SW: 
+                    (sb)?                                                                      `SB:
+                    (sh)?                                                                      `SH:`SW; 
+  assign mult_op = (mult&&s10)?                                     `mult: 
+                   (multu&&s10)?                                    `multu: 
+                   (mthi&&s10)?                                     `mth:
+                   (mtlo&&s10)?                                     `mtl:
+                   (divu&&s10)?                                     `divu:
+                   (div&&s10)?                                      `div:3'b000;    
+  assign  epcwr = s12;  
+    
+  assign  exlset = s12; 
+    
+  assign  exlclr = s9&eret;  
+    
+  assign  cp0_we = s10&mtc0;                          
+endmodule
+
+
+module   instruction(instr,addu,addi,addiu,subu,ori,lui,slt,lw,sw,beq,j,jal,jr,bne,sltu,sltiu,blez,lb,lbu,lh,lhu,sb,sh,slti,bgtz,bgez,bltz,jalr,add,sub,sll,sllv,srl,srlv,sra,srav,and1,andi,or1,xor1,nor1,xori,mult,multu,div,divu,mthi,mtlo,mfhi,mflo,eret,mfc0,mtc0);  
+  input      [31:0]         instr;
+  output                    addu;
+  output                    addi;
+  output                    addiu;
+  output                    subu;
+  output                    ori;
+  output                    lui;
+  output                    slt;
+  output                    lw;
+  output                    sw;
+  output                    bne;
+  output                    beq;
+  output                    j;
+  output                    jal;
+  output                    jr;
+  output                    sltu;
+  output                    blez;
+  output                    lb;
+  output                    lbu;
+  output                    lh;
+  output                    lhu;
+  output                    sb;
+  output                    sh;
+  output                    slti;
+  output                    bgtz;
+  output                    bgez;
+  output                    bltz;
+  output                    jalr;
+  output                    add; 
+  output                    sub; 
+  output                    sll; 
+  output                    sllv;
+  output                    srl; 
+  output                    srlv;
+  output                    sra; 
+  output                    srav; 
+  output                    or1; 
+  output                    xor1; 
+  output                    nor1;  
+  output                    xori; 
+  output                    and1; 
+  output                   mult;
+  output                   multu;  
+  output                   div;
+  output                   divu;  
+  output                   mthi;
+  output                   mtlo;  
+  output                   mfhi;
+  output                   mflo;  
+  output                   andi; 
+  output                   sltiu;
+  output                   eret;  
+  output                   mfc0; 
+  output                   mtc0;
+      
+  wire     [31:26]          opcode;
+  wire     [5:0]            func;
+  wire     [4:0]             rt;
+  
+  assign opcode = instr [31:26];
+  assign func   = instr [5:0];
+  assign rt     = instr [20:16];
+  
+  assign addu     = ((opcode == 6'b000000)&&(func == 6'b100001));
+  assign subu     = ((opcode == 6'b000000)&&(func == 6'b100011));
+  assign jr       = ((opcode == 6'b000000)&&(func == 6'b001000));
+  assign slt      = ((opcode == 6'b000000)&&(func == 6'b101010));
+  assign sltu     = ((opcode == 6'b000000)&&(func == 6'b101011));
+  assign jalr     = ((opcode == 6'b000000)&&(func == 6'b001001));
+  assign add      = ((opcode == 6'b000000)&&(func == 6'b100000)); 
+  assign sub      = ((opcode == 6'b000000)&&(func == 6'b100010));
+  assign sll      = ((opcode == 6'b000000)&&(func == 6'b000000));  
+  assign sllv     = ((opcode == 6'b000000)&&(func == 6'b000100));   
+  assign srl      = ((opcode == 6'b000000)&&(func == 6'b000010));  
+  assign srlv     = ((opcode == 6'b000000)&&(func == 6'b000110));  
+  assign sra      = ((opcode == 6'b000000)&&(func == 6'b000011));  
+  assign srav     = ((opcode == 6'b000000)&&(func == 6'b000111));  
+  assign or1      = ((opcode == 6'b000000)&&(func == 6'b100101));  
+  assign xor1     = ((opcode == 6'b000000)&&(func == 6'b100110));       
+  assign nor1     = ((opcode == 6'b000000)&&(func == 6'b100111));
+  assign and1     = ((opcode == 6'b000000)&&(func == 6'b100100));
+  assign mult     = ((opcode == 6'b000000)&&(func == 6'b011000));
+  assign multu    = ((opcode == 6'b000000)&&(func == 6'b011001));
+  assign div      = ((opcode == 6'b000000)&&(func == 6'b011010));
+  assign divu     = ((opcode == 6'b000000)&&(func == 6'b011011));
+  assign mthi     = ((opcode == 6'b000000)&&(func == 6'b010001));
+  assign mtlo     = ((opcode == 6'b000000)&&(func == 6'b010011));
+  assign mfhi     = ((opcode == 6'b000000)&&(func == 6'b010000));
+  assign mflo     = ((opcode == 6'b000000)&&(func == 6'b010010));
+  
+  assign ori      = (opcode == 6'b001101);
+  assign xori      = (opcode == 6'b001110);
+  assign lui      = (opcode == 6'b001111);
+  assign addi     = (opcode == 6'b001000);
+  assign addiu    = (opcode == 6'b001001);
+  assign lw       = (opcode == 6'b100011);
+  assign sw       = (opcode == 6'b101011);
+  assign beq      = (opcode == 6'b000100);
+  assign bne      = (opcode == 6'b000101);
+  assign j        = (opcode == 6'b000010);
+  assign blez     = (opcode == 6'b000110);
+  assign bgez     = ((opcode == 6'b000001)&&(rt == 5'b00001));
+  assign bltz     = ((opcode == 6'b000001)&&(rt == 5'b00000));
+  assign bgtz     = (opcode == 6'b000111);
+  assign jal      = (opcode == 6'b000011);
+  assign andi     = (opcode == 6'b001100);
+  assign sltiu    = (opcode == 6'b001011);
+ 
+  assign lb       = (opcode == 6'b100000);
+  assign lbu      = (opcode == 6'b100100);
+  assign lh       = (opcode == 6'b100001);
+  assign lhu      = (opcode == 6'b100101);
+  assign slti     = (opcode == 6'b001010);
+  assign sh       = (opcode == 6'b101001);
+  assign sb       = (opcode == 6'b101000);
+  
+  assign eret = (opcode == 6'b010000) & (func == 6'b011000); 
+  assign mfc0 = (opcode == 6'b010000) & (instr[25:21] == 5'b0000); 
+  assign mtc0 = (opcode == 6'b010000) & (instr[25:21] == 5'b00100); 
+  
+ endmodule 

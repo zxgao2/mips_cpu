@@ -1,0 +1,15 @@
+`include "src\\head.v"
+module ext(ext_op,num,out);
+  input  [1:0]     ext_op;
+  input  [15:0]    num;
+  output [31:0]    out;
+  reg    [31:0]    out2;
+  
+  
+    case (ext_op)
+      `ZERO_EXT    :    assign out = {{16{1'b0}},num};
+       `SIGN_EXT    :    assign out = {{16{num[15]}},num};
+      `LUI_EXT     :    assign out = {num,{16{1'b0}}};
+      default      :    assign out =32'b0;
+    endcase 
+endmodule
